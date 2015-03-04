@@ -34,6 +34,7 @@ import hudson.scheduler.Hash;
 import hudson.util.FormValidation;
 import java.text.DateFormat;
 import java.util.Calendar;
+import java.util.ArrayDeque;
 import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.QueryParameter;
@@ -74,23 +75,25 @@ public class TimerTrigger extends Trigger<BuildableItem> {
          * Performs syntax check.
          */
         public FormValidation doCheckSpec(@QueryParameter String value, @AncestorInPath Item item) {
+	    ArrayDeque<FormValidation> validators = new ArrayDeque<FormValidation>();
             try {
                 CronTabList ctl = CronTabList.create(fixNull(value), item != null ? Hash.from(item.getFullName()) : null);
                 String msg = ctl.checkSanity();
-                if(msg!=null)   return FormValidation.warning(msg);
+                if(msg!=null)  validators.push(FormValidation.warning(msg));
                 Calendar prev = ctl.previous();
                 Calendar next = ctl.next();
                 if (prev != null && next != null) {
                     DateFormat fmt = DateFormat.getDateTimeInstance(DateFormat.FULL, DateFormat.FULL);
-                    return FormValidation.ok(Messages.TimerTrigger_would_last_have_run_at_would_next_run_at(fmt.format(prev.getTime()), fmt.format(next.getTime())));
+                    validators.push(FormValidation.ok(Messages.TimerTrigger_would_last_have_run_at_would_next_run_at(fmt.format(prev.getTime()), fmt.format(next.getTime()))));
                 } else {
-                    return FormValidation.warning(Messages.TimerTrigger_no_schedules_so_will_never_run());
+                    validators.push(FormValidation.warning(Messages.TimerTrigger_no_schedules_so_will_never_run()));
                 }
             } catch (ANTLRException e) {
                 if (value.trim().indexOf('\n')==-1 && value.contains("**"))
-                    return FormValidation.error(Messages.TimerTrigger_MissingWhitespace());
-                return FormValidation.error(e.getMessage());
+                    validators.push(FormValidation.error(Messages.TimerTrigger_MissingWhitespace()));
+                validators.push(FormValidation.error(e.getMessage()));
             }
+	    return FormValidation.aggregate(validators);
         }
     }
     
